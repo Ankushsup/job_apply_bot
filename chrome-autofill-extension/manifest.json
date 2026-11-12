@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Ankush Resume 1-Click Auto-Filler",
+  "version": "1.0.0",
+  "description": "Automatically fills job application forms with Ankush Upadhyay's live resume data (Node.js Backend Engineer).",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Auto-Fill Ankush's Resume Data"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "autofill-page": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Auto-fill current job form with resume data"
+    }
+  }
+}

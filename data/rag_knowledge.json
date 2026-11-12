@@ -1,0 +1,39 @@
+[
+  {
+    "domain": "Real-time, Streaming & Concurrency",
+    "keywords": ["webrtc", "socket.io", "websocket", "streaming", "real-time", "video", "chat", "concurrency"],
+    "project": "MNM Fitness Platform at D-WebBox",
+    "highlight": "Architected low-latency WebRTC and Socket.io infrastructure serving 500+ concurrent active video/audio users with sub-second synchronization and zero dropped sessions."
+  },
+  {
+    "domain": "Enterprise Security, Auth & RBAC",
+    "keywords": ["keycloak", "jwt", "oauth", "auth", "security", "rbac", "active directory", "otp", "recaptcha", "sessions"],
+    "project": "Enterprise Auth at D-WebBox & Texple Technologies",
+    "highlight": "Implemented enterprise-grade Keycloak SSO and fine-grained Role-Based Access Control (RBAC), eliminating unauthorized access incidents across multi-tenant microservices; built Redis-backed OTP sessions via AWS SNS."
+  },
+  {
+    "domain": "Database Optimization & High Scale",
+    "keywords": ["postgresql", "postgres", "sql", "redis", "caching", "query optimization", "indexing", "stored procedures", "schemas", "elasticsearch"],
+    "project": "Database Architecture & Caching",
+    "highlight": "Optimized high-volume PostgreSQL schemas, views, and composite indexing strategies cutting query execution times by 30-40%; integrated Redis for distributed session caching and Elasticsearch for fast text search (60% query speedup)."
+  },
+  {
+    "domain": "Microservices, NestJS & API Architecture",
+    "keywords": ["node.js", "nodejs", "nestjs", "express", "microservices", "rest", "api", "architecture", "distributed", "typescript"],
+    "project": "High-Throughput API Gateway & Services",
+    "highlight": "Engineered modular RESTful APIs and distributed microservices with Node.js, NestJS, and Express, handling thousands of daily transactions with clean domain-driven architecture and strict DTO validation."
+  },
+  {
+    "domain": "DevOps, Cloud & Infrastructure",
+    "keywords": ["aws", "ec2", "sns", "docker", "nginx", "ci/cd", "deployment", "linux", "cloud"],
+    "project": "Cloud Infrastructure & Containerization",
+    "highlight": "Containerized multi-service applications using Docker, deployed on AWS EC2 behind Nginx reverse proxies with SSL termination (99.9% uptime SLA); automated CI/CD deployment pipelines cutting release time by 40%."
+  },
+  {
+    "domain": "Event-Driven & Chatbot Automation",
+    "keywords": ["whatsapp", "chatbot", "webhook", "automation", "messaging", "bot"],
+    "project": "Meta WhatsApp Business Automation",
+    "highlight": "Built an automated conversational ticket booking platform leveraging WhatsApp Cloud Webhooks, stateful session routing, and dynamic templating with Node.js and MongoDB."
+  }
+]
+

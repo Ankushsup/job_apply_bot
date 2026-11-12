@@ -1,0 +1,50 @@
+[
+  {
+    "company": "Juspay",
+    "email": "careers@juspay.in",
+    "category": "FinTech Unicorn",
+    "note": "High-volume Node.js, low-latency transaction processing"
+  },
+  {
+    "company": "Razorpay",
+    "email": "jobs@razorpay.com",
+    "category": "FinTech Unicorn",
+    "note": "Payment gateway & financial infrastructure"
+  },
+  {
+    "company": "Sarvam AI",
+    "email": "careers@sarvam.ai",
+    "category": "GenAI Tech Leader",
+    "note": "Foundational AI models for India"
+  },
+  {
+    "company": "Wadhwani AI",
+    "email": "contact@wadhwaniai.org",
+    "category": "AI Research Institute",
+    "note": "AI for social impact and healthcare"
+  },
+  {
+    "company": "D.E. Shaw India",
+    "email": "recruiting.india@deshaw.com",
+    "category": "Global FinTech / Hedge Fund",
+    "note": "Elite financial technology systems"
+  },
+  {
+    "company": "Aspire Systems",
+    "email": "careers@aspiresys.com",
+    "category": "Enterprise Product Engineering",
+    "note": "Software engineering consultancy"
+  },
+  {
+    "company": "Pramata",
+    "email": "careers@pramata.com",
+    "category": "Enterprise B2B SaaS",
+    "note": "Contract management automation"
+  },
+  {
+    "company": "Mphasis",
+    "email": "hr@mphasis.com",
+    "category": "IT Services & Cloud Solutions",
+    "note": "Enterprise cloud transformations"
+  }
+]

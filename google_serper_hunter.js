@@ -34,14 +34,14 @@ const BOARD_HOSTS = new Set([
   'instagram.com', 'twitter.com', 'x.com', 'youtube.com', 'github.com'
 ]);
 
-async function serperSearch(query, num = 15) {
+async function serperSearch(query, num = 10) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return [];
 
   try {
     const res = await axios.post(
       SERPER_ENDPOINT,
-      { q: query, gl: 'in', num },
+      { q: query, gl: 'in', num: 10 },
       {
         headers: {
           'X-API-KEY': apiKey,
@@ -79,7 +79,7 @@ async function fetchGoogleSerperJobs() {
   ];
 
   for (const q of queries) {
-    const results = await serperSearch(q, 15);
+    const results = await serperSearch(q, 10);
     for (const r of results) {
       const url = r.link || '';
       if (!url || seenUrls.has(url)) continue;

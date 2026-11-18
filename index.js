@@ -35,6 +35,7 @@ const { fetchGoogleSerperJobs } = require('./google_serper_hunter');
 const { fetchCuvetteJobs, fetchHiristJobs } = require('./indian_scrapers');
 const { fetchWeWorkRemotelyJobs, fetchWorkingNomadsJobs, fetchRemotiveBackendJobs } = require('./wfh_scrapers');
 const { fetchHireeingJobs } = require('./hireeing_scraper');
+const { fetchNewPlatformJobs } = require('./new_platforms_scraper');
 const { runFollowUpSequence } = require('./followup_agent');
 const { matchJobWithRAG } = require('./rag_matcher');
 const { generateTailoredResume, cleanupOldResumes } = require('./resume_tailor');
@@ -792,7 +793,7 @@ async function runJobScan() {
       linkedIn, remoteOk, jobicy, arbeitnow, remotive, himalayas,
       hackerNews, wellfound, greenhouseJobs, leverJobs, ashbyJobs,
       fundedStartups, googleSerperJobs, cuvetteJobs,
-      hiristJobs, wwrJobs, workingNomadsJobs, remotiveWfhJobs, hireeingJobs
+      hiristJobs, wwrJobs, workingNomadsJobs, remotiveWfhJobs, hireeingJobs, newPlatformJobs
     ] = await Promise.all([
       fetchLinkedInJobs(),
       fetchRemoteOKJobs(),
@@ -812,7 +813,8 @@ async function runJobScan() {
       fetchWeWorkRemotelyJobs(),
       fetchWorkingNomadsJobs(),
       fetchRemotiveBackendJobs(),
-      fetchHireeingJobs()
+      fetchHireeingJobs(),
+      fetchNewPlatformJobs()
     ]);
 
     const allJobs = [
@@ -834,7 +836,8 @@ async function runJobScan() {
       ...wwrJobs,
       ...workingNomadsJobs,
       ...remotiveWfhJobs,
-      ...hireeingJobs
+      ...hireeingJobs,
+      ...(newPlatformJobs || [])
     ];
 
     console.log(`\nFound total ${allJobs.length} raw jobs across sources:`);
@@ -844,7 +847,7 @@ async function runJobScan() {
     console.log(`- Greenhouse ATS: ${greenhouseJobs.length} | Lever ATS: ${leverJobs.length}`);
     console.log(`- Cuvette: ${cuvetteJobs.length} | Hirist: ${hiristJobs.length}`);
     console.log(`- WeWorkRemotely (WFH): ${wwrJobs.length} | WorkingNomads (WFH): ${workingNomadsJobs.length} | Remotive Backend (WFH): ${remotiveWfhJobs.length}`);
-    console.log(`- Hireeing (WFH): ${hireeingJobs.length}`);
+    console.log(`- Hireeing (WFH): ${hireeingJobs.length} | New Platforms (JSRemotely/Nodesk): ${newPlatformJobs?.length || 0}`);
 
     // 30-Day Duplicate Lockout (Companies & Domains)
     const appliedCompanies30d = new Set();

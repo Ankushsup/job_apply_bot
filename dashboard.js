@@ -255,6 +255,31 @@ const server = http.createServer((req, res) => {
     </div>
   `).join('');
 
+  function getChanceRating(item) {
+    let score = 55;
+    const isEmail = item.method === 'DIRECT_EMAIL' || item.method === 'DIRECT_HR_OUTREACH';
+    const isATS = (item.source || '').includes('Greenhouse') || (item.source || '').includes('Lever') || (item.source || '').includes('Ashby') || (item.source || '').includes('Workable');
+    const isStartup = (item.source || '').includes('Funded') || (item.source || '').includes('HackerNews') || (item.source || '').includes('Serper');
+    const titleLower = (item.title || '').toLowerCase();
+
+    if (isEmail) score += 30; // Direct human inbox
+    else if (isATS) score += 18; // Clean direct ATS queue
+    if (isStartup) score += 12; // Fast-moving startup
+
+    if (titleLower.includes('nest') || (titleLower.includes('node') && (titleLower.includes('backend') || titleLower.includes('developer')))) {
+      score += 15;
+    }
+    if (titleLower.includes('lead') || titleLower.includes('principal')) {
+      score -= 5;
+    }
+
+    score = Math.min(Math.max(score, 50), 98);
+
+    if (score >= 85) return { score, label: 'High Callback', badgeStyle: 'background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;font-weight:700;', stars: '★★★★★', rank: 'A+' };
+    if (score >= 70) return { score, label: 'Good Odds', badgeStyle: 'background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;font-weight:700;', stars: '★★★★☆', rank: 'A' };
+    return { score, label: 'Fair Odds', badgeStyle: 'background:#fefce8;color:#ca8a04;border:1px solid #fef08a;font-weight:700;', stars: '★★★☆☆', rank: 'B' };
+  }
+
   // Dedicated Cards for "Direct Apply Posts" Tab
   const applyPostsHtml = portalItems.slice(0, 150).map((item) => {
     let cleanCompany = (item.company || 'Unknown').trim();
@@ -275,6 +300,8 @@ const server = http.createServer((req, res) => {
     if (isLinkedIn) badgeClass = 'badge-sky';
     else if (isATS) badgeClass = 'badge-amber';
 
+    const chance = getChanceRating(item);
+
     const dateStr = item.appliedAt
       ? new Date(item.appliedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
       : 'Discovered';
@@ -285,7 +312,10 @@ const server = http.createServer((req, res) => {
           <div style="font-weight:700;color:#0f172a;font-size:15px;display:flex;align-items:center;gap:6px;">
             <span>🏢</span> ${cleanCompany}
           </div>
-          <span class="badge ${badgeClass}">${item.source || item.method || 'Career Portal'}</span>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <span class="badge ${badgeClass}">${item.source || item.method || 'Career Portal'}</span>
+            <span class="badge" style="${chance.badgeStyle}" title="Calculated interview probability based on stack match & outreach channel">${chance.stars} ${chance.label} (${chance.score}%)</span>
+          </div>
         </div>
         <div class="apply-card-title">${item.title || 'Backend Engineer'}</div>
         <div class="apply-card-meta">
@@ -315,12 +345,14 @@ const server = http.createServer((req, res) => {
     const isLinkedIn = (item.source || '').toLowerCase().includes('linkedin') || (item.target || '').includes('linkedin.com');
     const isATS = (item.source || '').includes('Greenhouse') || (item.source || '').includes('Lever') || (item.source || '').includes('Ashby') || (item.source || '').includes('Workable');
     const isPortal = !isEmail && item.target && item.target.startsWith('http');
+    const chance = getChanceRating(item);
 
     let rowCategories = ['all'];
     if (isEmail) rowCategories.push('email');
     if (isPortal) rowCategories.push('apply');
     if (isLinkedIn) rowCategories.push('linkedin');
     if (isATS) rowCategories.push('ats');
+    if (chance.score >= 85) rowCategories.push('hot');
     const catAttr = rowCategories.join(' ');
 
     let badgeClass = 'badge-blue';
@@ -341,7 +373,10 @@ const server = http.createServer((req, res) => {
         <td style="padding:12px 16px;font-weight:700;color:#0f172a;max-width:200px;" title="${(item.company || '').replace(/"/g, '&quot;')}">${cleanCompany}</td>
         <td style="padding:12px 16px;color:#334155;font-weight:600;">${item.title || 'Backend Engineer'}</td>
         <td style="padding:12px 16px;">
-          <span class="badge ${badgeClass}">${item.method || item.source}</span>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span class="badge ${badgeClass}" style="align-self:flex-start;">${item.method || item.source}</span>
+            <span class="badge" style="${chance.badgeStyle}align-self:flex-start;font-size:11px;">${chance.stars} ${chance.label} (${chance.score}%)</span>
+          </div>
         </td>
         <td style="padding:12px 16px;color:#64748b;font-size:12px;white-space:nowrap;">
           ${item.appliedAt ? new Date(item.appliedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '-'}
@@ -572,6 +607,12 @@ const server = http.createServer((req, res) => {
       background: #ea580c !important;
       color: #fff !important;
       border-color: #ea580c !important;
+    }
+    .chip-fire.active {
+      background: linear-gradient(135deg, #ea580c, #dc2626) !important;
+      color: #fff !important;
+      border-color: #ea580c !important;
+      box-shadow: 0 2px 8px rgba(234, 88, 12, 0.4);
     }
     .chip-green.active {
       background: #059669 !important;
@@ -815,6 +856,7 @@ const server = http.createServer((req, res) => {
       <!-- Quick Filter Chips -->
       <div class="filter-chips">
         <button class="chip-btn active" data-cat="all" onclick="setPipelineFilter('all', this)">All (${total})</button>
+        <button class="chip-btn chip-fire" data-cat="hot" onclick="setPipelineFilter('hot', this)">🔥 High Callback (>85%)</button>
         <button class="chip-btn chip-orange" data-cat="apply" onclick="setPipelineFilter('apply', this)">⚡ Ready to Apply (${portalItems.length})</button>
         <button class="chip-btn chip-green" data-cat="email" onclick="setPipelineFilter('email', this)">✉️ Emailed HR (${directEmailsCount})</button>
         <button class="chip-btn chip-sky" data-cat="linkedin" onclick="setPipelineFilter('linkedin', this)">💼 LinkedIn</button>
@@ -1032,7 +1074,8 @@ const server = http.createServer((req, res) => {
           || (currentPipelineCat === 'apply' && cat.includes('apply'))
           || (currentPipelineCat === 'email' && cat.includes('email'))
           || (currentPipelineCat === 'linkedin' && cat.includes('linkedin'))
-          || (currentPipelineCat === 'ats' && cat.includes('ats'));
+          || (currentPipelineCat === 'ats' && cat.includes('ats'))
+          || (currentPipelineCat === 'hot' && cat.includes('hot'));
 
         row.style.display = (matchesQuery && matchesCat) ? '' : 'none';
       });

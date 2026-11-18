@@ -11,8 +11,18 @@
 
 const { spawn, exec } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
-const nodeExec = process.execPath;
+let nodeExec = process.execPath;
+if (parseInt(process.versions.node.split('.')[0], 10) < 18) {
+  const candidateNodes = ['/opt/homebrew/bin/node', '/usr/local/bin/node'];
+  for (const c of candidateNodes) {
+    if (fs.existsSync(c)) {
+      nodeExec = c;
+      break;
+    }
+  }
+}
 const cwd = __dirname;
 
 console.log('======================================================================');
@@ -31,13 +41,14 @@ dashboard.on('error', (err) => {
 // 2. Open Browser after 2 seconds
 setTimeout(() => {
   console.log('🖥️ Opening http://localhost:3000 in your default browser...');
-  exec('start http://localhost:3000');
+  const openCmd = process.platform === 'darwin' ? 'open http://localhost:3000' : process.platform === 'win32' ? 'start http://localhost:3000' : 'xdg-open http://localhost:3000';
+  exec(openCmd);
 }, 2000);
 
-// 3. Spawn Backend Scanner Daemon after 1 second
+let scanner;
 setTimeout(() => {
   console.log('\n🤖 [2/2] Starting 24/7 Autonomous Scanner Daemon...');
-  const scanner = spawn(nodeExec, ['index.js'], { cwd, stdio: 'inherit' });
+  scanner = spawn(nodeExec, ['index.js'], { cwd, stdio: 'inherit' });
 
   scanner.on('error', (err) => {
     console.error('❌ Failed to start scanner:', err.message);
@@ -48,6 +59,7 @@ setTimeout(() => {
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down Job Bot services cleanly...');
   try { dashboard.kill(); } catch {}
+  try { if (scanner) scanner.kill(); } catch {}
   process.exit(0);
 });
 

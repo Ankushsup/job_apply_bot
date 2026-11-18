@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -8,7 +9,36 @@ const { scanAndSyncBounces } = require('./imap_bounce_scanner');
 const { getResumeProfile, saveResumeProfile } = require('./resume_profile');
 const { huntAndPitchReadyJobs } = require('./hunt_ready_jobs');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
+const DASHBOARD_USER = process.env.DASHBOARD_USER;
+const DASHBOARD_PASS = process.env.DASHBOARD_PASS;
+const API_SECRET_TOKEN = process.env.API_SECRET_TOKEN;
+
+function isAuthenticated(req) {
+  // If no credentials configured in .env, allow (backward-compatible)
+  if (!DASHBOARD_USER && !DASHBOARD_PASS && !API_SECRET_TOKEN) return true;
+
+  const authHeader = req.headers['authorization'] || '';
+  const apiKeyHeader = req.headers['x-api-key'] || '';
+
+  // Check Bearer / API Key (e.g. Chrome Extension or external scripts)
+  if (API_SECRET_TOKEN && (apiKeyHeader === API_SECRET_TOKEN || authHeader === `Bearer ${API_SECRET_TOKEN}`)) {
+    return true;
+  }
+
+  // Check HTTP Basic Auth (for web browsers)
+  if (DASHBOARD_USER && DASHBOARD_PASS && authHeader.startsWith('Basic ')) {
+    const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8');
+    const [user, ...rest] = credentials.split(':');
+    const pass = rest.join(':');
+    if (user === DASHBOARD_USER && pass === DASHBOARD_PASS) {
+      return true;
+    }
+  }
+
+  return false;
+}
 const DATA_DIR = path.join(__dirname, 'data');
 const APPLIED_FILE = path.join(DATA_DIR, 'applied_jobs.json');
 const BLACKLIST_FILE = path.join(DATA_DIR, 'blacklist_companies.json');
@@ -60,10 +90,19 @@ const server = http.createServer((req, res) => {
   // CORS for Chrome Auto-Fill Extension
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     return res.end();
+  }
+
+  // Security: Authentication Check (Basic Auth for browser / Token for extension)
+  if (!isAuthenticated(req)) {
+    res.writeHead(401, {
+      'WWW-Authenticate': 'Basic realm="Autonomous Outreach Mission Control"',
+      'Content-Type': 'application/json'
+    });
+    return res.end(JSON.stringify({ error: 'Unauthorized. Valid login credentials or API key required.' }));
   }
 
   // Profile API (used by Chrome Extension & Dashboard)
@@ -877,6 +916,6 @@ const server = http.createServer((req, res) => {
   res.end(html);
 });
 
-server.listen(PORT, () => {
-  console.log(`Autonomous Outreach Mission Control running at: http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Autonomous Outreach Mission Control running at: http://${HOST}:${PORT}`);
 });

@@ -13,6 +13,15 @@ npm-debug.log*
 Thumbs.db
 
 # Generated runtime data & tailored PDFs
+data/resumes/
+data/seen_jobs.json
+data/applied_jobs.json
+data/bounced_emails.json
+data/interview_prep.json
+data/freelance_jobs.json
+data/replies.json
+data/hr_contacts.json
+autofill_visual_proof.png
 job-apply-bot/data/resumes/
 job-apply-bot/data/seen_jobs.json
 job-apply-bot/data/applied_jobs.json

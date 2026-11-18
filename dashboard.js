@@ -199,6 +199,7 @@ const server = http.createServer((req, res) => {
   const bouncedList = getBouncedList();
 
   const directEmailsCount = list.filter(i => i.method === 'DIRECT_EMAIL' || i.method === 'DIRECT_HR_OUTREACH').length;
+  const portalItems = list.filter(i => i.target && i.target.startsWith('http'));
 
   const bouncedRowsHtml = bouncedList.map((email) => `
     <tr class="job-row" data-search="${email.toLowerCase()}">
@@ -254,6 +255,53 @@ const server = http.createServer((req, res) => {
     </div>
   `).join('');
 
+  // Dedicated Cards for "Direct Apply Posts" Tab
+  const applyPostsHtml = portalItems.slice(0, 150).map((item) => {
+    let cleanCompany = (item.company || 'Unknown').trim();
+    if (cleanCompany.toLowerCase().startsWith("i'm ") || cleanCompany.includes("http://") || cleanCompany.includes("https://")) {
+      cleanCompany = "Startup / Founder";
+    }
+    const safeUrl = encodeURIComponent(item.target || '');
+    const safeComp = encodeURIComponent(cleanCompany);
+    const safeTitle = encodeURIComponent(item.title || 'Backend Engineer');
+    const safeCover = encodeURIComponent(item.coverLetter || '');
+    let domain = '';
+    try { domain = new URL(item.target).hostname.replace('www.', ''); } catch {}
+
+    const isLinkedIn = (item.source || '').toLowerCase().includes('linkedin') || (item.target || '').includes('linkedin.com');
+    const isATS = (item.source || '').includes('Greenhouse') || (item.source || '').includes('Lever') || (item.source || '').includes('Ashby') || (item.source || '').includes('Workable');
+
+    let badgeClass = 'badge-blue';
+    if (isLinkedIn) badgeClass = 'badge-sky';
+    else if (isATS) badgeClass = 'badge-amber';
+
+    const dateStr = item.appliedAt
+      ? new Date(item.appliedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+      : 'Discovered';
+
+    return `
+      <div class="apply-card" data-search="${(cleanCompany + ' ' + (item.title || '') + ' ' + (item.source || '') + ' ' + domain).toLowerCase()}">
+        <div class="apply-card-header">
+          <div style="font-weight:700;color:#0f172a;font-size:15px;display:flex;align-items:center;gap:6px;">
+            <span>🏢</span> ${cleanCompany}
+          </div>
+          <span class="badge ${badgeClass}">${item.source || item.method || 'Career Portal'}</span>
+        </div>
+        <div class="apply-card-title">${item.title || 'Backend Engineer'}</div>
+        <div class="apply-card-meta">
+          <span>🌐 ${domain || 'career portal'}</span>
+          <span>⏱️ ${dateStr}</span>
+        </div>
+        <div class="apply-card-footer">
+          <button class="btn-open-apply" data-url="${safeUrl}" data-company="${safeComp}" data-title="${safeTitle}" data-cover="${safeCover}">
+            ⚡ 1-Click Open & Copy Pitch ↗
+          </button>
+          <button class="btn-blacklist" data-company="${safeComp}" title="Blacklist company">✕</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   // Clean Pipeline Rows
   const rowsHtml = list.slice(0, 150).map((item) => {
     let cleanCompany = (item.company || 'Unknown').trim();
@@ -265,6 +313,15 @@ const server = http.createServer((req, res) => {
 
     const isEmail = item.method === 'DIRECT_EMAIL' || item.method === 'DIRECT_HR_OUTREACH';
     const isLinkedIn = (item.source || '').toLowerCase().includes('linkedin') || (item.target || '').includes('linkedin.com');
+    const isATS = (item.source || '').includes('Greenhouse') || (item.source || '').includes('Lever') || (item.source || '').includes('Ashby') || (item.source || '').includes('Workable');
+    const isPortal = !isEmail && item.target && item.target.startsWith('http');
+
+    let rowCategories = ['all'];
+    if (isEmail) rowCategories.push('email');
+    if (isPortal) rowCategories.push('apply');
+    if (isLinkedIn) rowCategories.push('linkedin');
+    if (isATS) rowCategories.push('ats');
+    const catAttr = rowCategories.join(' ');
 
     let badgeClass = 'badge-blue';
     if (isEmail) badgeClass = 'badge-green';
@@ -280,7 +337,7 @@ const server = http.createServer((req, res) => {
     const searchString = `${cleanCompany} ${item.title || ''} ${item.method || ''} ${item.source || ''} ${domain}`.toLowerCase();
 
     return `
-      <tr class="job-row" data-search="${searchString}">
+      <tr class="job-row" data-search="${searchString}" data-cat="${catAttr}">
         <td style="padding:12px 16px;font-weight:700;color:#0f172a;max-width:200px;" title="${(item.company || '').replace(/"/g, '&quot;')}">${cleanCompany}</td>
         <td style="padding:12px 16px;color:#334155;font-weight:600;">${item.title || 'Backend Engineer'}</td>
         <td style="padding:12px 16px;">
@@ -479,9 +536,129 @@ const server = http.createServer((req, res) => {
       border-radius: 10px;
       font-size: 14px;
       background: #f8fafc;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     .search-box:focus { outline: none; border-color: var(--primary); background: #fff; }
+
+    /* Filter Chips */
+    .filter-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    .chip-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: #475569;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip-btn:hover { background: #f1f5f9; }
+    .chip-btn.active {
+      background: #0f172a;
+      color: #fff;
+      border-color: #0f172a;
+    }
+    .chip-orange.active {
+      background: #ea580c !important;
+      color: #fff !important;
+      border-color: #ea580c !important;
+    }
+    .chip-green.active {
+      background: #059669 !important;
+      color: #fff !important;
+      border-color: #059669 !important;
+    }
+    .chip-sky.active {
+      background: #0284c7 !important;
+      color: #fff !important;
+      border-color: #0284c7 !important;
+    }
+    .chip-purple.active {
+      background: #7c3aed !important;
+      color: #fff !important;
+      border-color: #7c3aed !important;
+    }
+
+    /* Cards Grid for Direct Apply Posts */
+    .post-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .apply-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.18s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    }
+    .apply-card:hover {
+      border-color: #ea580c;
+      box-shadow: 0 8px 20px rgba(234, 88, 12, 0.12);
+      transform: translateY(-2px);
+    }
+    .apply-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .apply-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .apply-card-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .apply-card-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .apply-card-footer .btn-open-apply {
+      flex: 1;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      background: #ea580c !important;
+      color: #fff !important;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+      box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3) !important;
+    }
+    .apply-card-footer .btn-open-apply:hover {
+      background: #c2410c !important;
+    }
     .table-wrapper {
       max-height: 640px;
       overflow-y: auto;
@@ -625,6 +802,7 @@ const server = http.createServer((req, res) => {
     <!-- Navigation Tabs -->
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('tab-pipeline')">🚀 Full Pipeline (${total})</button>
+      <button class="tab-btn" onclick="switchTab('tab-apply-posts')" style="color:#ea580c;font-weight:700;">⚡ Direct Apply Posts (${portalItems.length})</button>
       <button class="tab-btn" onclick="switchTab('tab-freelance')">💼 Freelance & Contracts (${freelanceGigs.length})</button>
       <button class="tab-btn" onclick="switchTab('tab-prep')">🎯 AI Interview Coach (${prepCards.length})</button>
       <button class="tab-btn" onclick="switchTab('tab-bounces')">🛡️ Bounced Inboxes (${bouncedList.length})</button>
@@ -632,8 +810,17 @@ const server = http.createServer((req, res) => {
 
     <!-- TAB 1: PIPELINE -->
     <div id="tab-pipeline" class="tab-content">
-      <input type="text" id="pipeline-search" class="search-box" placeholder="🔍 Instant Search by company, role, HR email, or source (e.g. NestJS, Remote, Elastic, Dentsu)..." onkeyup="filterTable('pipeline-table', this.value)" />
+      <input type="text" id="pipeline-search" class="search-box" placeholder="🔍 Instant Search by company, role, HR email, or source (e.g. NestJS, Remote, Elastic, Dentsu)..." onkeyup="runPipelineFilter()" />
       
+      <!-- Quick Filter Chips -->
+      <div class="filter-chips">
+        <button class="chip-btn active" data-cat="all" onclick="setPipelineFilter('all', this)">All (${total})</button>
+        <button class="chip-btn chip-orange" data-cat="apply" onclick="setPipelineFilter('apply', this)">⚡ Ready to Apply (${portalItems.length})</button>
+        <button class="chip-btn chip-green" data-cat="email" onclick="setPipelineFilter('email', this)">✉️ Emailed HR (${directEmailsCount})</button>
+        <button class="chip-btn chip-sky" data-cat="linkedin" onclick="setPipelineFilter('linkedin', this)">💼 LinkedIn</button>
+        <button class="chip-btn chip-purple" data-cat="ats" onclick="setPipelineFilter('ats', this)">🏢 Direct ATS (Greenhouse/Ashby)</button>
+      </div>
+
       <div class="table-wrapper">
         <table id="pipeline-table">
           <thead>
@@ -649,6 +836,25 @@ const server = http.createServer((req, res) => {
             ${rowsHtml}
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- TAB: DIRECT APPLY POSTS -->
+    <div id="tab-apply-posts" class="tab-content" style="display:none;">
+      <div style="background:#fff7ed;border:1px solid #ffedd5;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h3 style="margin:0 0 4px;font-size:16px;color:#9a3412;">⚡ Direct Apply Career Pages & LinkedIn Posts</h3>
+          <p style="margin:0;font-size:13px;color:#c2410c;">These jobs have live application portal links. Clicking "⚡ 1-Click Open & Copy Pitch" opens the career page in a new tab and automatically copies your company-tailored pitch into your clipboard!</p>
+        </div>
+        <div style="font-weight:700;color:#9a3412;font-size:14px;background:#ffedd5;padding:6px 14px;border-radius:8px;">
+          ${portalItems.length} Roles Ready to Apply
+        </div>
+      </div>
+
+      <input type="text" id="apply-posts-search" class="search-box" placeholder="🔍 Filter apply pages by company, role, or portal (e.g. Greenhouse, LinkedIn, Ashby, Workable)..." onkeyup="filterApplyCards(this.value)" />
+
+      <div class="post-grid" id="apply-cards-grid">
+        ${applyPostsHtml}
       </div>
     </div>
 
@@ -799,8 +1005,46 @@ const server = http.createServer((req, res) => {
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      document.getElementById(tabId).style.display = 'block';
-      event.target.classList.add('active');
+      const target = document.getElementById(tabId);
+      if (target) target.style.display = 'block';
+      if (window.event && window.event.target && window.event.target.classList.contains('tab-btn')) {
+        window.event.target.classList.add('active');
+      }
+    }
+
+    let currentPipelineCat = 'all';
+
+    function setPipelineFilter(cat, btn) {
+      currentPipelineCat = cat;
+      document.querySelectorAll('.filter-chips .chip-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      runPipelineFilter();
+    }
+
+    function runPipelineFilter() {
+      const q = (document.getElementById('pipeline-search')?.value || '').toLowerCase().trim();
+      const rows = document.querySelectorAll('#pipeline-table tbody tr.job-row');
+      rows.forEach(row => {
+        const text = (row.getAttribute('data-search') || '').toLowerCase();
+        const cat = (row.getAttribute('data-cat') || '').toLowerCase();
+        const matchesQuery = !q || text.includes(q);
+        const matchesCat = currentPipelineCat === 'all'
+          || (currentPipelineCat === 'apply' && cat.includes('apply'))
+          || (currentPipelineCat === 'email' && cat.includes('email'))
+          || (currentPipelineCat === 'linkedin' && cat.includes('linkedin'))
+          || (currentPipelineCat === 'ats' && cat.includes('ats'));
+
+        row.style.display = (matchesQuery && matchesCat) ? '' : 'none';
+      });
+    }
+
+    function filterApplyCards(query) {
+      const q = (query || '').toLowerCase().trim();
+      const cards = document.querySelectorAll('#apply-cards-grid .apply-card');
+      cards.forEach(c => {
+        const text = (c.getAttribute('data-search') || '').toLowerCase();
+        c.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
     }
 
     function filterTable(tableId, query) {

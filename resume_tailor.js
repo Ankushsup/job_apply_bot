@@ -117,10 +117,51 @@ function generateTailoredResume(companyName, topKeywords = []) {
 
     doc.end();
 
-    stream.on('finish', () => resolve(outputPath));
+    stream.on('finish', () => {
+      // Clean up older temporary resumes to prevent disk bloat
+      cleanupOldResumes(30);
+      resolve(outputPath);
+    });
     stream.on('error', () => resolve(path.join(__dirname, 'resume.pdf')));
   });
 }
 
-module.exports = { generateTailoredResume };
+/**
+ * Automatically purges generated tailored resumes older than maxAgeMinutes (default 30 mins)
+ * to keep disk size minimal and prevent storage bloat.
+ */
+function cleanupOldResumes(maxAgeMinutes = 30) {
+  if (!fs.existsSync(RESUME_DIR)) return 0;
+  let deletedCount = 0;
+  const now = Date.now();
+  const maxAgeMs = maxAgeMinutes * 60 * 1000;
+
+  try {
+    const files = fs.readdirSync(RESUME_DIR);
+    for (const file of files) {
+      if (!file.endsWith('.pdf')) continue;
+      const filePath = path.join(RESUME_DIR, file);
+      try {
+        const stats = fs.statSync(filePath);
+        if (now - stats.mtimeMs > maxAgeMs) {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        }
+      } catch {}
+    }
+    if (deletedCount > 0) {
+      console.log(`🧹 [Resume Cleaner] Purged ${deletedCount} temporary tailored resumes older than ${maxAgeMinutes} minutes.`);
+    }
+  } catch (err) {
+    console.error('[Resume Cleaner Error]:', err.message);
+  }
+  return deletedCount;
+}
+
+// Background cleaner: checks every 15 minutes
+setInterval(() => {
+  cleanupOldResumes(30);
+}, 15 * 60 * 1000).unref();
+
+module.exports = { generateTailoredResume, cleanupOldResumes };
 

@@ -37,7 +37,7 @@ const { fetchWeWorkRemotelyJobs, fetchWorkingNomadsJobs, fetchRemotiveBackendJob
 const { fetchHireeingJobs } = require('./hireeing_scraper');
 const { runFollowUpSequence } = require('./followup_agent');
 const { matchJobWithRAG } = require('./rag_matcher');
-const { generateTailoredResume } = require('./resume_tailor');
+const { generateTailoredResume, cleanupOldResumes } = require('./resume_tailor');
 const { generateInterviewPrep } = require('./interview_coach');
 const { checkRecruiterReplies } = require('./reply_tracker');
 const { verifyEmailDeliverability, scanAndSyncBounces } = require('./email_verifier');
@@ -740,6 +740,11 @@ async function runJobScan() {
   console.log(`======================================================`);
 
   try {
+    // 0. Purge temporary tailored resumes older than 30 mins to avoid disk bloat
+    try {
+      cleanupOldResumes(30);
+    } catch {}
+
     // 1. Sync Bounces from Gmail Trash & Inbox so we never email a bounced address
     try {
       console.log(`🛡️ [Zero-Bounce] Syncing bounce notifications from Gmail Trash, Inbox & Spam...`);

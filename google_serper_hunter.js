@@ -13,6 +13,7 @@
  */
 
 const axios = require('axios');
+const { extractEmailsFromText } = require('./email_scraper');
 
 const SERPER_ENDPOINT = 'https://google.serper.dev/search';
 
@@ -24,7 +25,7 @@ const BOARD_HOSTS = new Set([
   'instagram.com', 'twitter.com', 'x.com', 'youtube.com', 'github.com'
 ]);
 
-async function serperSearch(query, num = 10) {
+async function serperSearch(query, num = 15) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return [];
 
@@ -37,7 +38,7 @@ async function serperSearch(query, num = 10) {
           'X-API-KEY': apiKey,
           'Content-Type': 'application/json'
         },
-        timeout: 8000
+        timeout: 15000
       }
     );
     return Array.isArray(res.data?.organic) ? res.data.organic : [];
@@ -56,40 +57,72 @@ async function fetchGoogleSerperJobs() {
   const seenUrls = new Set();
 
   const queries = [
-    'site:linkedin.com/posts ("hiring" OR "looking for") ("Node.js" OR "NestJS" OR "Backend") ("India" OR "Mumbai" OR "Remote") "@"',
-    'site:jobs.ashbyhq.com OR site:boards.greenhouse.io OR site:jobs.lever.co ("Node.js" OR "Backend") "India"'
+    // 1. Direct HR LinkedIn hiring posts with emails / resumes invited
+    'site:linkedin.com/posts ("hiring" OR "urgent requirement" OR "looking for") ("Node.js" OR "NestJS" OR "Backend Developer") ("India" OR "Mumbai" OR "Remote") ("@" OR "email" OR "share CV" OR "send resume")',
+    // 2. Direct live LinkedIn Job Pages (Google-indexed: bypasses LinkedIn 429 rate limit!)
+    'site:linkedin.com/jobs/view ("Node.js" OR "NestJS" OR "Backend Engineer" OR "Backend Developer") ("India" OR "Remote" OR "Mumbai")',
+    // 3. Top Startup ATS Portals with immediate Node.js / NestJS roles
+    'site:jobs.ashbyhq.com OR site:boards.greenhouse.io OR site:jobs.lever.co OR site:apply.workable.com ("Node.js" OR "NestJS" OR "Backend") ("India" OR "Remote")',
+    // 4. Founder / Recruiter outreach posts seeking 3-4 YOE Backend
+    'site:linkedin.com/posts ("Node.js" OR "NestJS" OR "Backend") ("3+ years" OR "3 years" OR "immediate joiner" OR "0-15 days") ("India" OR "Remote")',
+    // 5. Tech roles on Cutshort & Naukri via Google
+    'site:cutshort.io/job OR site:naukri.com/job-listings ("Node.js" OR "NestJS") ("Backend") ("India" OR "Remote")'
   ];
 
   for (const q of queries) {
-    const results = await serperSearch(q, 10);
+    const results = await serperSearch(q, 15);
     for (const r of results) {
       const url = r.link || '';
       if (!url || seenUrls.has(url)) continue;
       seenUrls.add(url);
 
-      const title = (r.title || 'Node.js Backend Developer').replace(/\s+\|\s+LinkedIn.*$/i, '').trim();
+      let title = (r.title || 'Node.js Backend Developer')
+        .replace(/\s+\|\s+LinkedIn.*$/i, '')
+        .replace(/\s+-\s+Naukri\.com.*$/i, '')
+        .replace(/\s+\|\s+Cutshort.*$/i, '')
+        .trim();
+
       const snippet = r.snippet || '';
       const combined = `${title} ${snippet}`;
 
+      // Extract direct recruiter/HR email if written in Google snippet!
+      const snippetEmails = extractEmailsFromText(combined);
+      const directHrEmail = snippetEmails.length > 0 ? snippetEmails[0] : null;
+
       // Extract company hint from LinkedIn post or ATS URL
       let company = 'Tech Company (Google Search)';
-      const atsMatch = url.match(/(?:boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com)\/([^/?#]+)/i);
+      const atsMatch = url.match(/(?:boards\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com)\/([^/?#]+)/i);
       if (atsMatch) {
         company = atsMatch[1].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       } else {
-        const atMatch = combined.match(/\b(?:at|@)\s+([A-Z][A-Za-z0-9&.\- ]{2,28})/);
+        const atMatch = combined.match(/\b(?:hiring\s+for|at|@)\s+([A-Z][A-Za-z0-9&.\- ]{2,28})/i);
         if (atMatch) company = atMatch[1].trim();
       }
 
+      // If LinkedIn Job URL, extract company from title if "Role at Company" format
+      if (url.includes('linkedin.com/jobs/view')) {
+        const parts = title.split(' hiring ');
+        if (parts.length === 2) {
+          company = parts[0].trim();
+          title = parts[1].replace(/ in .*$/, '').trim();
+        }
+      }
+
       jobs.push({
-        id: `serper-${Buffer.from(url).toString('base64').slice(0, 20)}`,
+        id: `serper-${Buffer.from(url).toString('base64').slice(0, 24)}`,
         title: title.slice(0, 90),
-        company,
+        company: company.slice(0, 50),
         location: 'India / Remote',
         tags: 'Google Search, Direct HR Post, Node.js',
         description: `${title}\n${snippet}\nSource URL: ${url}`,
         url,
-        source: url.includes('linkedin.com/posts') ? 'Google LinkedIn Posts' : 'Google ATS Search'
+        hrEmail: directHrEmail,
+        email: directHrEmail,
+        source: url.includes('linkedin.com/posts')
+          ? 'Google LinkedIn Posts'
+          : url.includes('linkedin.com/jobs')
+            ? 'Google LinkedIn Jobs'
+            : 'Google ATS Search'
       });
     }
   }

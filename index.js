@@ -154,51 +154,85 @@ function normalizeCompany(name) {
 // ==============================================================================
 
 // Source 1: LinkedIn (Guest Public Search API - Sorted by Most Recent / DD)
+const LINKEDIN_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15'
+];
+
 async function fetchLinkedInJobs() {
   const jobs = [];
-  const urls = [
-    'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=Node.js%20Backend&location=India&f_TPR=r86400&sortBy=DD&start=0',
-    'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=NestJS&location=India&f_TPR=r86400&sortBy=DD&start=0',
-    'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=Node.js&location=Remote&f_TPR=r86400&sortBy=DD&start=0',
-    'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=Node.js%20NestJS&location=Mumbai&f_TPR=r86400&sortBy=DD&start=0'
+  const queryConfigs = [
+    { keywords: 'Node.js Backend', location: 'India' },
+    { keywords: 'NestJS Developer', location: 'India' },
+    { keywords: 'Backend Developer', location: 'India' },
+    { keywords: 'Node.js Developer', location: 'Remote' },
+    { keywords: 'NestJS', location: 'Remote' },
+    { keywords: 'TypeScript Backend', location: 'India' },
+    { keywords: 'Node.js NestJS', location: 'Mumbai' },
+    { keywords: 'Backend Engineer', location: 'Mumbai' },
+    { keywords: 'Software Engineer Backend', location: 'India' },
+    { keywords: 'Express.js Developer', location: 'India' }
   ];
 
-  for (const url of urls) {
-    try {
-      const res = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9'
-        },
-        timeout: 10000
-      });
+  // Rotate and sample query combinations each cycle to broaden coverage
+  const sampledQueries = queryConfigs.sort(() => 0.5 - Math.random()).slice(0, 6);
 
-      const $ = cheerio.load(res.data);
-      $('li').each(function () {
-        const item = $(this);
-        const title = item.find('.base-search-card__title').text().trim();
-        const company = item.find('.base-search-card__subtitle').text().trim();
-        const location = item.find('.job-search-card__location').text().trim();
-        const link = item.find('a.base-card__full-link').attr('href');
-        const urn = item.find('.base-card').attr('data-entity-urn') || '';
-        const idMatch = urn.match(/jobPosting:(\d+)/) || (link ? link.match(/-(\d+)\?/) : null);
-        const id = idMatch ? idMatch[1] : null;
+  for (const q of sampledQueries) {
+    const ua = LINKEDIN_USER_AGENTS[Math.floor(Math.random() * LINKEDIN_USER_AGENTS.length)];
+    // Search page 1 (start=0) and page 2 (start=25) for deeper volume
+    for (const start of [0, 25]) {
+      const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(q.keywords)}&location=${encodeURIComponent(q.location)}&f_TPR=r604800&sortBy=DD&start=${start}`;
+      try {
+        const res = await axios.get(url, {
+          headers: {
+            'User-Agent': ua,
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          },
+          timeout: 10000
+        });
 
-        if (title && link) {
-          jobs.push({
-            id: `linkedin-${id || title.replace(/\s+/g, '-').toLowerCase()}`,
-            title,
-            company: company || 'Company via LinkedIn',
-            location: location || 'India / Remote',
-            tags: 'LinkedIn, Node.js, NestJS',
-            description: `${title} at ${company} (${location}). Found on LinkedIn. Required stack: Node.js, NestJS, Backend APIs.`,
-            url: link.split('?')[0],
-            source: 'LinkedIn'
-          });
+        const $ = cheerio.load(res.data);
+        const lis = $('li');
+        if (lis.length === 0) break;
+
+        lis.each(function () {
+          const item = $(this);
+          const title = item.find('.base-search-card__title').text().trim();
+          const company = item.find('.base-search-card__subtitle').text().trim();
+          const location = item.find('.job-search-card__location').text().trim();
+          const link = item.find('a.base-card__full-link').attr('href');
+          const urn = item.find('.base-card').attr('data-entity-urn') || '';
+          const idMatch = urn.match(/jobPosting:(\d+)/) || (link ? link.match(/-(\d+)\?/) : null);
+          const id = idMatch ? idMatch[1] : null;
+
+          if (title && link) {
+            jobs.push({
+              id: `linkedin-${id || title.replace(/\s+/g, '-').toLowerCase()}`,
+              title,
+              company: company || 'Company via LinkedIn',
+              location: location || 'India / Remote',
+              tags: 'LinkedIn, Node.js, NestJS, Backend',
+              description: `${title} at ${company} (${location}). Found on LinkedIn. Required stack: Node.js, NestJS, Backend APIs.`,
+              url: link.split('?')[0],
+              source: 'LinkedIn'
+            });
+          }
+        });
+
+        // Delay between calls to respect rate limits
+        await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
+      } catch (err) {
+        if (err.response && err.response.status === 429) {
+          console.warn(`[LinkedIn Notice]: 429 throttled on "${q.keywords}". Skipping further pages.`);
+          break;
+        } else {
+          console.error(`[LinkedIn Error]: ${err.message}`);
         }
-      });
-    } catch (err) {
-      console.error(`[LinkedIn Error]: ${err.message}`);
+      }
     }
   }
   return jobs;

@@ -13,9 +13,18 @@
  */
 
 const axios = require('axios');
-const { extractEmailsFromText } = require('./email_scraper');
 
 const SERPER_ENDPOINT = 'https://google.serper.dev/search';
+
+function extractSnippetEmails(text) {
+  if (!text) return [];
+  const regex = /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g;
+  const matches = text.match(regex) || [];
+  return matches
+    .map(e => e.toLowerCase().trim())
+    .filter(e => !/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/i.test(e))
+    .filter((e, idx, arr) => arr.indexOf(e) === idx);
+}
 
 const BOARD_HOSTS = new Set([
   'linkedin.com', 'www.linkedin.com', 'greenhouse.io', 'boards.greenhouse.io',
@@ -86,7 +95,7 @@ async function fetchGoogleSerperJobs() {
       const combined = `${title} ${snippet}`;
 
       // Extract direct recruiter/HR email if written in Google snippet!
-      const snippetEmails = extractEmailsFromText(combined);
+      const snippetEmails = extractSnippetEmails(combined);
       const directHrEmail = snippetEmails.length > 0 ? snippetEmails[0] : null;
 
       // Extract company hint from LinkedIn post or ATS URL

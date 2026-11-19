@@ -65,7 +65,16 @@ Return ONLY valid JSON (no markdown):
       questions
     };
 
-    const list = JSON.parse(fs.readFileSync(PREP_FILE, 'utf-8'));
+    let list = JSON.parse(fs.readFileSync(PREP_FILE, 'utf-8'));
+    // Deduplicate: remove any existing card for same company or jobId
+    const cleanComp = (job.company || '').toLowerCase().trim();
+    list = list.filter(item => {
+      if (item.jobId && item.jobId === job.id) return false;
+      const itemComp = (item.company || '').toLowerCase().trim();
+      if (cleanComp && itemComp === cleanComp) return false;
+      return true;
+    });
+
     list.unshift(record);
     if (list.length > 50) list.pop();
     fs.writeFileSync(PREP_FILE, JSON.stringify(list, null, 2), 'utf-8');
@@ -80,7 +89,14 @@ Return ONLY valid JSON (no markdown):
 function getLatestPrepCards() {
   try {
     if (!fs.existsSync(PREP_FILE)) return [];
-    return JSON.parse(fs.readFileSync(PREP_FILE, 'utf-8'));
+    const list = JSON.parse(fs.readFileSync(PREP_FILE, 'utf-8'));
+    const seen = new Set();
+    return list.filter(item => {
+      const comp = (item.company || '').toLowerCase().trim();
+      if (!comp || seen.has(comp)) return false;
+      seen.add(comp);
+      return true;
+    });
   } catch {
     return [];
   }

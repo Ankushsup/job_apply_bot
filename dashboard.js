@@ -53,10 +53,55 @@ function getBouncedList() {
   }
 }
 
+function normalizeCompany(name) {
+  if (!name) return '';
+  return name.toLowerCase()
+    .replace(/^(the|a)\s+/i, '')
+    .replace(/\b(pvt|ltd|inc|llc|technologies|technology|solutions|services|software|ai|labs|group|corp|corporation)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+function deduplicateJobList(list) {
+  if (!Array.isArray(list)) return [];
+  const seenIds = new Set();
+  const seenTargets = new Set();
+  const seenPairs = new Set();
+  const deduped = [];
+
+  for (const item of list) {
+    if (!item) continue;
+    const id = item.id ? String(item.id) : null;
+    let target = (item.target || item.url || '').toLowerCase().trim();
+    if (target.startsWith('http')) {
+      try {
+        const u = new URL(target);
+        target = u.origin + u.pathname; // strip tracking params
+      } catch {}
+    }
+
+    const comp = normalizeCompany(item.company);
+    const title = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const pairKey = comp && title ? `${comp}__${title}` : null;
+
+    if (id && seenIds.has(id)) continue;
+    if (target && target.startsWith('http') && seenTargets.has(target)) continue;
+    if (pairKey && seenPairs.has(pairKey)) continue;
+
+    if (id) seenIds.add(id);
+    if (target && target.startsWith('http')) seenTargets.add(target);
+    if (pairKey) seenPairs.add(pairKey);
+
+    deduped.push(item);
+  }
+  return deduped;
+}
+
 function getMetrics() {
   if (!fs.existsSync(APPLIED_FILE)) return { total: 0, list: [], breakdown: {} };
   try {
-    const list = JSON.parse(fs.readFileSync(APPLIED_FILE, 'utf-8'));
+    const rawList = JSON.parse(fs.readFileSync(APPLIED_FILE, 'utf-8'));
+    const list = deduplicateJobList(rawList);
     const breakdown = {};
     list.forEach(a => {
       const key = a.method || a.source || 'Other';

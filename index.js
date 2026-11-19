@@ -134,6 +134,42 @@ function logAppliedJob(record) {
   ensureDb();
   try {
     const list = JSON.parse(fs.readFileSync(APPLIED_JOBS_FILE, 'utf-8'));
+    const recId = record.id ? String(record.id) : null;
+    let recTarget = (record.target || '').toLowerCase().trim();
+    if (recTarget.startsWith('http')) {
+      try {
+        const u = new URL(recTarget);
+        recTarget = u.origin + u.pathname;
+      } catch {}
+    }
+    const recComp = normalizeCompany(record.company);
+    const recTitle = (record.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const isDuplicate = list.some(a => {
+      if (recId && a.id && String(a.id) === recId) return true;
+      if (recTarget && a.target) {
+        let aTarget = a.target.toLowerCase().trim();
+        if (aTarget.startsWith('http')) {
+          try {
+            const u = new URL(aTarget);
+            aTarget = u.origin + u.pathname;
+          } catch {}
+        }
+        if (aTarget === recTarget) return true;
+      }
+      if (recComp && recTitle) {
+        const aComp = normalizeCompany(a.company);
+        const aTitle = (a.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (aComp === recComp && aTitle === recTitle) return true;
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      console.log(`[Deduplicator]: Skipped duplicate logging for "${record.title}" at "${record.company}".`);
+      return;
+    }
+
     list.push({ ...record, appliedAt: new Date().toISOString() });
     fs.writeFileSync(APPLIED_JOBS_FILE, JSON.stringify(list, null, 2), 'utf-8');
   } catch (err) {
@@ -860,16 +896,30 @@ async function runJobScan() {
     console.log(`- WeWorkRemotely (WFH): ${wwrJobs.length} | WorkingNomads (WFH): ${workingNomadsJobs.length} | Remotive Backend (WFH): ${remotiveWfhJobs.length}`);
     console.log(`- Hireeing (WFH): ${hireeingJobs.length} | New Platforms (JSRemotely/Nodesk): ${newPlatformJobs?.length || 0}`);
 
-    // 30-Day Duplicate Lockout (Companies & Domains)
+    // 30-Day Duplicate Lockout & Existing Applications Index
     const appliedCompanies30d = new Set();
     const contactedDomains30d = new Set();
+    const appliedUrls = new Set();
+    const appliedPairs = new Set();
     try {
       const applied = JSON.parse(fs.readFileSync(APPLIED_JOBS_FILE, 'utf-8'));
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       applied.forEach(a => {
         const isRecent = !a.appliedAt || new Date(a.appliedAt) >= thirtyDaysAgo;
+        const normC = normalizeCompany(a.company);
+        const normT = (a.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (normC && normT) appliedPairs.add(`${normC}__${normT}`);
+
+        let tUrl = (a.target || a.url || '').toLowerCase().trim();
+        if (tUrl.startsWith('http')) {
+          try {
+            const u = new URL(tUrl);
+            appliedUrls.add(u.origin + u.pathname);
+          } catch {}
+        }
+
         if (isRecent) {
-          if (a.company) appliedCompanies30d.add(normalizeCompany(a.company));
+          if (a.company) appliedCompanies30d.add(normC);
           if (a.target && a.target.includes('@')) {
             const domain = a.target.split('@')[1]?.toLowerCase();
             if (domain) contactedDomains30d.add(domain);
@@ -880,21 +930,50 @@ async function runJobScan() {
 
     const seenIds = getSeenJobIds();
     const blacklist = getBlacklistedCompanies();
-    const seenThisScan = new Set();
+    const seenThisScanCompanies = new Set();
+    const seenThisScanUrls = new Set();
+    const seenThisScanPairs = new Set();
 
     const newJobs = allJobs.filter(j => {
-      if (seenIds.has(String(j.id))) return false;
+      const idStr = String(j.id);
+      if (seenIds.has(idStr)) return false;
+
+      // Clean URL check (stripping tracking query params)
+      let cleanUrl = (j.url || '').toLowerCase().trim();
+      if (cleanUrl.startsWith('http')) {
+        try {
+          const u = new URL(cleanUrl);
+          cleanUrl = u.origin + u.pathname;
+        } catch {}
+      }
+      if (cleanUrl) {
+        if (appliedUrls.has(cleanUrl) || seenThisScanUrls.has(cleanUrl)) {
+          markJobSeen(j.id);
+          return false;
+        }
+      }
+
       const comp = (j.company || '').toLowerCase().trim();
       const normComp = normalizeCompany(comp);
+      const title = (j.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const pairKey = normComp && title ? `${normComp}__${title}` : null;
+
+      // Duplicate Role at same Company
+      if (pairKey && (appliedPairs.has(pairKey) || seenThisScanPairs.has(pairKey))) {
+        markJobSeen(j.id);
+        return false;
+      }
 
       const isBlacklisted = Array.from(blacklist).some(b => comp.includes(b));
       if (isBlacklisted) {
+        markJobSeen(j.id);
         console.log(`⛔ [Skipped Blacklisted Company]: ${j.company}`);
         return false;
       }
 
       // Skip duplicate company already contacted in last 30 days or seen this scan
-      if (normComp && (appliedCompanies30d.has(normComp) || seenThisScan.has(normComp))) {
+      if (normComp && (appliedCompanies30d.has(normComp) || seenThisScanCompanies.has(normComp))) {
+        markJobSeen(j.id);
         return false;
       }
 
@@ -902,9 +981,14 @@ async function runJobScan() {
       const loc = `${j.location || ''} ${j.title || ''}`.toLowerCase();
       const isForeignOnsiteOnly = /\b(london|uk|united kingdom|berlin|germany|new york|san francisco|usa only|us only|canada only|toronto|paris|amsterdam|austin|seattle)\b/i.test(loc)
         && !/\b(remote|anywhere|worldwide|global|india|mumbai|bengaluru|bangalore|pune|delhi|noida|gurgaon|hyderabad)\b/i.test(loc);
-      if (isForeignOnsiteOnly) return false;
+      if (isForeignOnsiteOnly) {
+        markJobSeen(j.id);
+        return false;
+      }
 
-      if (normComp) seenThisScan.add(normComp);
+      if (normComp) seenThisScanCompanies.add(normComp);
+      if (cleanUrl) seenThisScanUrls.add(cleanUrl);
+      if (pairKey) seenThisScanPairs.add(pairKey);
       return true;
     });
     console.log(`\n🆕 New, unseen jobs to evaluate: ${newJobs.length}`);

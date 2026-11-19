@@ -54,11 +54,17 @@ async function fetchJSRemotelyJobs() {
   return jobs;
 }
 
+let jobicyCache = { timestamp: 0, jobs: [] };
+
 async function fetchJobicyBackendV2() {
+  const now = Date.now();
+  if (now - jobicyCache.timestamp < 60 * 60 * 1000 && jobicyCache.jobs.length > 0) {
+    return jobicyCache.jobs;
+  }
   const jobs = [];
   try {
     const res = await axios.get('https://jobicy.com/api/v2/remote-jobs?count=30&tag=backend', {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       timeout: 10000
     });
     const list = res.data?.jobs || [];
@@ -77,7 +83,13 @@ async function fetchJobicyBackendV2() {
         });
       }
     }
+    if (jobs.length > 0) {
+      jobicyCache = { timestamp: now, jobs };
+    }
   } catch (err) {
+    if (jobicyCache.jobs.length > 0) {
+      return jobicyCache.jobs;
+    }
     console.warn(`[Jobicy Backend v2 Notice]: ${err.message}`);
   }
   return jobs;

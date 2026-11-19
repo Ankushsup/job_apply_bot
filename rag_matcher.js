@@ -131,12 +131,24 @@ Return ONLY valid JSON:
   "pitch": "The tailored cold email pitch"
 }`;
 
-      const res = await ai.models.generateContent({
-        model: 'gemini-3.5-flash-lite',
-        contents: prompt
-      });
+      const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+      let res = null;
+      for (const mod of candidateModels) {
+        try {
+          res = await ai.models.generateContent({
+            model: mod,
+            contents: prompt
+          });
+          if (res && res.text) break;
+        } catch (mErr) {
+          if (mErr.message && (mErr.message.includes('503') || mErr.message.includes('429') || mErr.message.includes('high demand'))) {
+            continue; // try next model fallback
+          }
+          throw mErr;
+        }
+      }
 
-      const raw = res.text ? res.text.trim() : '';
+      const raw = (res && res.text) ? res.text.trim() : '';
       const cleanJson = raw.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
       const parsed = JSON.parse(cleanJson);
 

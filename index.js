@@ -178,8 +178,8 @@ async function fetchLinkedInJobs() {
     { keywords: 'Express.js Developer', location: 'India' }
   ];
 
-  // Rotate and sample query combinations each cycle to broaden coverage
-  const sampledQueries = queryConfigs.sort(() => 0.5 - Math.random()).slice(0, 6);
+  // Rotate and sample 3 query combinations each cycle to avoid aggressive datacenter throttling
+  const sampledQueries = queryConfigs.sort(() => 0.5 - Math.random()).slice(0, 3);
 
   for (const q of sampledQueries) {
     const ua = LINKEDIN_USER_AGENTS[Math.floor(Math.random() * LINKEDIN_USER_AGENTS.length)];
@@ -225,7 +225,7 @@ async function fetchLinkedInJobs() {
         });
 
         // Delay between calls to respect rate limits
-        await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
+        await new Promise(r => setTimeout(r, 2200 + Math.random() * 1200));
       } catch (err) {
         if (err.response && err.response.status === 429) {
           console.warn(`[LinkedIn Notice]: 429 throttled on "${q.keywords}". Skipping further pages.`);
@@ -384,11 +384,16 @@ async function fetchRemoteOKJobs() {
 }
 
 // Source 6: Jobicy
+let jobicyMainCache = { timestamp: 0, jobs: [] };
 async function fetchJobicyJobs() {
+  const now = Date.now();
+  if (now - jobicyMainCache.timestamp < 60 * 60 * 1000 && jobicyMainCache.jobs.length > 0) {
+    return jobicyMainCache.jobs;
+  }
   const jobs = [];
   try {
     const res = await axios.get('https://jobicy.com/api/v2/remote-jobs?count=20&tag=nodejs', {
-      headers: { 'User-Agent': 'JobHunterBot/1.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       timeout: 10000
     });
     if (res.data && Array.isArray(res.data.jobs)) {
@@ -406,9 +411,15 @@ async function fetchJobicyJobs() {
           });
         }
       }
+      if (jobs.length > 0) {
+        jobicyMainCache = { timestamp: now, jobs };
+      }
     }
   } catch (err) {
-    console.error(`[Jobicy Error]: ${err.message}`);
+    if (jobicyMainCache.jobs.length > 0) {
+      return jobicyMainCache.jobs;
+    }
+    console.warn(`[Jobicy Notice]: ${err.message}`);
   }
   return jobs;
 }
